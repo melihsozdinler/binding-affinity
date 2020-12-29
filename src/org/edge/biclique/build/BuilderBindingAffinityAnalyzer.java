@@ -59,7 +59,7 @@ public final class BuilderBindingAffinityAnalyzer{
 
 		public Builder setConfigurations(String filePath, String excelFilePath, Double thresholdVal, Boolean debug,
 				Integer numberOfBicliqueSteps, Integer maxNumberOfThreads, Integer chopIndexForFiles,
-				Integer beginIndex, Integer endIndex, Boolean considerWeights) {
+				Integer beginIndex, Integer endIndex, Boolean considerWeights, Boolean considerWeightsWithSize) {
 			this.configurations.setFilePath(filePath);
 			this.configurations.setExcelFilePath(excelFilePath);
 			this.configurations.setSignificanceThreshold(thresholdVal);
@@ -70,6 +70,7 @@ public final class BuilderBindingAffinityAnalyzer{
 			this.configurations.setBeginIndex(beginIndex);
 			this.configurations.setEndIndex(endIndex);
 			this.configurations.setConsiderWeights(considerWeights);
+			this.configurations.setConsiderWeightsWithSize(considerWeightsWithSize);
 			return this;
 		}
 
@@ -125,6 +126,11 @@ public final class BuilderBindingAffinityAnalyzer{
 
 		public Builder setConsiderWeights(Boolean considerWeigths) {
 			this.configurations.setConsiderWeights(considerWeigths);
+			return this;
+		}
+		
+		public Builder setConsiderWeightsWithSize(Boolean considerWeigthsWithSize) {
+			this.configurations.setConsiderWeightsWithSize(considerWeigthsWithSize);
 			return this;
 		}
 

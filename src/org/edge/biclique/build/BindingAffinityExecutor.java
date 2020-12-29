@@ -94,6 +94,86 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 			return Double.parseDouble(doubleStr.substring(0, doubleStr.lastIndexOf(".")));
 		}
 	}
+	
+	public Integer readFromFileResidue(Map<String, List<ExcelStore>> mapExcelStore, Map<String, Integer> mapIndexCount,
+			String fileName, String chainName, Integer indexerInput, String filePath) {
+
+		logger.info("Reading filename " + fileName + " - for chain " + chainName + " - indexer:" + indexerInput);
+		String content = null;
+		Integer indexer = indexerInput;
+		File file = new File(filePath + fileName);
+		try {
+			content = new String(Files.readAllBytes(Paths.get(file.getAbsolutePath())));
+			StringTokenizer st = new StringTokenizer(content);
+			String residueName = "";
+			String lastResidueName = "";
+			while (st.hasMoreTokens()) {
+				String line = st.nextToken("\n");
+				StringTokenizer stInner = new StringTokenizer(line);
+				List<ExcelStore> storeList = new ArrayList<ExcelStore>();
+
+				ExcelStore item = new ExcelStore();
+				int innerCount = 0;
+				while (stInner.hasMoreTokens()) {
+					if (line.contains("BEGIN") || line.contains("END")) {
+						continue;
+					}
+					String cellValue = stInner.nextToken(" ");
+					if (!cellValue.isEmpty() && stInner.hasMoreTokens()) {
+
+						if (Boolean.TRUE == getConfigurations().getDebug())
+							System.out.print(cellValue + "\t");
+
+						if (innerCount == 4)
+							item.setChain(cellValue);
+						else if (innerCount == 5) {
+							try {
+								item.setResi(checkDoubleAndReturn(cellValue));
+							} catch (NumberFormatException e) {
+								// not a double
+							}
+						} else if (innerCount == 3) {
+							item.setResiName(cellValue);
+							residueName = cellValue;
+						}
+						else if (innerCount == 2)
+							item.setName(cellValue);
+						else if (innerCount == 6)
+							item.setxCoord(checkDoubleAndReturn(cellValue));
+						else if (innerCount == 7)
+							item.setyCoord(checkDoubleAndReturn(cellValue));
+						else if (innerCount == 8)
+							item.setzCoord(checkDoubleAndReturn(cellValue));
+						innerCount++;
+
+					}
+				}
+
+				if (!residueName.isEmpty() && !residueName.equals(lastResidueName)) {
+					if (mapExcelStore.containsKey(chainName)) {
+						item.setId(indexer);
+						item.setChain(chainName);
+						mapExcelStore.get(chainName).add(item);
+					} else {
+						item.setId(indexer);
+						List<ExcelStore> listExcelStore = new ArrayList<ExcelStore>();
+						mapExcelStore.put(chainName, listExcelStore);
+						item.setChain(chainName);
+						mapExcelStore.get(chainName).add(item);
+					}
+				}
+				lastResidueName = residueName;
+				indexer++;
+			}
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+
+		mapIndexCount.put(chainName, indexer);
+		logger.info("Finished Reading filename " + fileName + " - for chain " + chainName + " - indexer:" + indexerInput);
+		return indexer;
+	}
 
 	public Integer readFromFile(Map<String, List<ExcelStore>> mapExcelStore, Map<String, Integer> mapIndexCount,
 			String fileName, String chainName, Integer indexerInput, String filePath) {
@@ -179,7 +259,7 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 					List<ExcelStore> tempExcelStorListInner = mapExcelStore.get(keysInner);
 					tempExcelStorList.forEach(item -> {
 						tempExcelStorListInner.forEach(itemInner -> {
-							logger.debug("Distance: " + item.distanceTo(itemInner));
+							//logger.debug("Distance: " + item.distanceTo(itemInner));
 							double temp = item.distanceTo(itemInner);
 							if (temp < configurations.getSignificanceThreshold()) {
 
@@ -412,7 +492,11 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 						.log(maxEdge.get() - (double)edge.getAttribute("distance") + 10.0);
 			}
 		});
-
+		/*
+		graph.getEdgeSet().stream().forEach(edge -> {
+			logger.info("{}", edgeWeightDataset[nodeAVector.get(edge.getSourceNode())][nodeBVector.get(edge.getTargetNode())]);
+		});
+		*/
 		// HeatmapDraw drawHeatmat = new HeatmapDraw();
 		// drawHeatmat.run(dataset);
 
@@ -448,9 +532,11 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 			ArrayList<Pair<ArrayList<Integer>, ArrayList<Integer>>> temp = polygonDraw.runOnly(
 					nodesLayerAGraph.entrySet().size() + 1, nodesLayerBGraph.entrySet().size() + 1, dataset, counter,
 					outputFileName);
+			
+			int oneCounter = calculateResults(temp,energyPointLayerA, energyPointLayerB, edgeWeightDataset, dataset);
 
 			if (Boolean.FALSE == configurations.getDebug()) {
-				int oneCounter = 0;
+				oneCounter = 0;
 
 				for (count = 0; count < nodesLayerAGraph.entrySet().size(); count++) {
 					for (int innerCount = 0; innerCount < nodesLayerBGraph.entrySet().size(); innerCount++) {
@@ -464,26 +550,7 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 					logger.info("Layer A One Counter(1): " + oneCounter);
 			}
 
-			int oneCounter = 0;
-
-			for (Pair<ArrayList<Integer>, ArrayList<Integer>> pairs : temp) {
-				for (Integer itemLayerA : pairs.item1) {
-					for (Integer itemLayerB : pairs.item2) {
-						if (dataset[itemLayerA - 1][itemLayerB] == 1) {
-							dataset[itemLayerA - 1][itemLayerB] = 0;
-							oneCounter++;
-
-							if (configurations.getConsiderWeights()) {
-								energyPointLayerA[itemLayerA - 1] += edgeWeightDataset[itemLayerA - 1][itemLayerB];
-								energyPointLayerB[itemLayerB] += edgeWeightDataset[itemLayerA - 1][itemLayerB];
-							} else {
-								energyPointLayerA[itemLayerA - 1]++;
-								energyPointLayerB[itemLayerB]++;
-							}
-						}
-					}
-				}
-			}
+			oneCounter = 0;
 
 			if (Boolean.TRUE == configurations.getDebug())
 				logger.info("All One Counter(1.1): " + oneCounter);
@@ -550,6 +617,59 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 		 * graph.clear();
 		 */
 		return resultModel;
+	}
+	
+	private Integer calculateResults(ArrayList<Pair<ArrayList<Integer>, ArrayList<Integer>>> resultPair,
+			double[] energyPointLayerA, double[] energyPointLayerB, double[][] edgeWeightDataset, double[][] dataset) {
+
+		Integer oneCounter = 0;
+
+		for (Pair<ArrayList<Integer>, ArrayList<Integer>> pairs : resultPair) {
+
+			Set<Integer> aLayerSet = new HashSet<Integer>();
+			Set<Integer> bLayerSet = new HashSet<Integer>();
+			for (Integer itemLayerA : pairs.item1) {
+				for (Integer itemLayerB : pairs.item2) {
+					if (dataset[itemLayerA - 1][itemLayerB] == 1) {
+						aLayerSet.add(itemLayerA - 1);
+						bLayerSet.add(itemLayerB);
+					}
+				}
+			}
+			
+			if (configurations.getConsiderWeightsWithSize()) {
+				for (Integer itemLayerA : pairs.item1) {
+					for (Integer itemLayerB : pairs.item2) {
+						if (dataset[itemLayerA - 1][itemLayerB] == 1) {
+							dataset[itemLayerA - 1][itemLayerB] = 0;
+							energyPointLayerA[itemLayerA - 1] += edgeWeightDataset[itemLayerA - 1][itemLayerB]
+									* aLayerSet.size();
+							energyPointLayerB[itemLayerB] += edgeWeightDataset[itemLayerA - 1][itemLayerB]
+									* bLayerSet.size();
+						}
+					}
+				}
+			} else {
+				for (Integer itemLayerA : pairs.item1) {
+					for (Integer itemLayerB : pairs.item2) {
+						if (dataset[itemLayerA - 1][itemLayerB] == 1) {
+							dataset[itemLayerA - 1][itemLayerB] = 0;
+							oneCounter++;
+
+							if (configurations.getConsiderWeights()) {
+								energyPointLayerA[itemLayerA - 1] += edgeWeightDataset[itemLayerA - 1][itemLayerB];
+								energyPointLayerB[itemLayerB] += edgeWeightDataset[itemLayerA - 1][itemLayerB];
+							} else {
+								energyPointLayerA[itemLayerA - 1]++;
+								energyPointLayerB[itemLayerB]++;
+							}
+						}
+					}
+				}
+			}
+		}
+
+		return oneCounter;
 	}
 
 	private String getUniqueFileName(String fileBaseName, String directory, String extension) {

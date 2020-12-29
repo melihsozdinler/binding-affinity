@@ -13,6 +13,7 @@ public class Configurations {
 	private Integer endIndex;
 	private Integer totalSamples;
 	private Boolean considerWeights;
+	private Boolean considerWeightsWithSize;
 	
 	public String getFilePath() {
 		return filePath;
@@ -106,10 +107,23 @@ public class Configurations {
 		this.considerWeights = considerWeights;
 	}
 	
+
+	public Boolean getConsiderWeightsWithSize() {
+		return considerWeightsWithSize;
+	}
+	
+	/**
+	 * @param considerWeightsWithSize the considerWeights with Size of biclique to set
+	 */
+	public void setConsiderWeightsWithSize(Boolean considerWeightsWithSize) {
+		this.considerWeightsWithSize = considerWeightsWithSize;
+	}
+	
 	public String toString() {
 		return  "\n * Excel Path: " + excelFilePath + "\n" + 
 				" * File Path: " + filePath + "\n" + 
 				" * Consider Weights: " + considerWeights + "\n" + 
+				" * Consider Weights with Size: " + considerWeightsWithSize + "\n" + 
 				" * Total Samples:  " + totalSamples + "\n" + 
 				" * Biclique Steps: " + numberOfBicqliueSteps + "\n" +
 				" * Max Number of Threads: " + maxNumberOfThreads;
