@@ -15,6 +15,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 import java.util.StringTokenizer;
 import java.util.UUID;
@@ -45,6 +46,19 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 
 	protected final Configurations configurations;
 	private String line;
+	private Map<String, List<ExcelStore>> mapExcelStore = new ConcurrentHashMap<String, List<ExcelStore>>();
+	private Map<String, Integer> mapIndexCount = new ConcurrentHashMap<String, Integer>();
+	private AffinityStore affinityStore;
+	private Graph graph = new SingleGraph("test");
+	// Set<Integer> nodesLayerA = new HashSet<Integer>();
+	private Map<Integer, Node> nodesLayerAGraph = new ConcurrentHashMap<Integer, Node>();
+	// Set<Integer> nodesLayerB = new HashSet<Integer>();
+	private Map<Integer, Node> nodesLayerBGraph = new ConcurrentHashMap<Integer, Node>();
+	private Map<Node, Set<Node>> sinkNeigbourNodes = new ConcurrentHashMap<Node, Set<Node>>();
+	
+	private final AtomicReference<Double> minEdge = new AtomicReference<Double>();
+	private final AtomicReference<Double> maxEdge = new AtomicReference<Double>();
+	private final AtomicReference<Double> averageEdge = new AtomicReference<Double>();
 
 	public BindingAffinityExecutor(Configurations configurations, String line) {
 		this.configurations = configurations;
@@ -110,7 +124,6 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 			while (st.hasMoreTokens()) {
 				String line = st.nextToken("\n");
 				StringTokenizer stInner = new StringTokenizer(line);
-				List<ExcelStore> storeList = new ArrayList<ExcelStore>();
 
 				ExcelStore item = new ExcelStore();
 				int innerCount = 0;
@@ -171,12 +184,16 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 		}
 
 		mapIndexCount.put(chainName, indexer);
-		logger.info("Finished Reading filename " + fileName + " - for chain " + chainName + " - indexer:" + indexerInput);
+		logger.info("Finished Reading filename based on Residues " + fileName + " - for chain " + chainName + " - indexer:" + indexerInput);
 		return indexer;
 	}
 
 	public Integer readFromFile(Map<String, List<ExcelStore>> mapExcelStore, Map<String, Integer> mapIndexCount,
 			String fileName, String chainName, Integer indexerInput, String filePath) {
+		
+		if (configurations.getResidueBased()) {
+			return readFromFileResidue(mapExcelStore, mapIndexCount, fileName, chainName, indexerInput, filePath);
+		}
 
 		logger.info("Reading filename " + fileName + " - for chain " + chainName + " - indexer:" + indexerInput);
 		String content = null;
@@ -243,15 +260,17 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 		}
 
 		mapIndexCount.put(chainName, indexer);
-		logger.info("Finished Reading filename " + fileName + " - for chain " + chainName + " - indexer:" + indexerInput);
+		logger.info("Finished Reading filename based on Atoms" + fileName + " - for chain " + chainName + " - indexer:" + indexerInput);
 		return indexer;
 	}
 
 	protected List<PairPoints> parsePairPoints(AtomicReference<Double> minEdge, AtomicReference<Double> maxEdge,
-			Map<String, List<ExcelStore>> mapExcelStore, Map<String, Integer> mapIndexCount) {
+			Map<String, List<ExcelStore>> mapExcelStore, Map<String, Integer> mapIndexCount, AtomicReference<Double> averageEdge) {
 
 		List<PairPoints> listPairPoints = new ArrayList<PairPoints>();
-
+		
+		AtomicInteger count = new AtomicInteger();	
+		
 		for (String keys : mapExcelStore.keySet()) {
 			final List<ExcelStore> tempExcelStorList = mapExcelStore.get(keys);
 			for (String keysInner : mapExcelStore.keySet()) {
@@ -261,8 +280,11 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 						tempExcelStorListInner.forEach(itemInner -> {
 							//logger.debug("Distance: " + item.distanceTo(itemInner));
 							double temp = item.distanceTo(itemInner);
-							if (temp < configurations.getSignificanceThreshold()) {
-
+							
+							averageEdge.set(averageEdge.get() + Math.abs(temp));
+							count.getAndAdd(1);
+							if (temp < configurations.getSignificanceThreshold()
+									&& configurations.getSignificanceThresholdMax() == Double.MAX_VALUE) {
 								if (Boolean.TRUE == configurations.getDebug())
 									logger.debug("2:" + item.getId() + " - "
 											+ (itemInner.getId() + mapIndexCount.get(item.getChain())));
@@ -284,6 +306,30 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 									minEdge.getAndSet(temp);
 								}
 							}
+							else {
+								if (temp >= configurations.getSignificanceThreshold()
+										&& temp < configurations.getSignificanceThresholdMax()) {
+									
+									PairPoints pairPoints = new PairPoints();
+
+									pairPoints.setSourceIndex(item.getId());
+									pairPoints.setTargetIndex(itemInner.getId() + mapIndexCount.get(item.getChain()));
+
+									pairPoints.setSourcePair(item.getChain());
+									pairPoints.setTargetPair(itemInner.getChain());
+
+									pairPoints.setSourcePoint(item.getPoint3d());
+									pairPoints.setTargetPoint(itemInner.getPoint3d());
+									listPairPoints.add(pairPoints);
+									
+									if (temp >= maxEdge.get()) {
+										maxEdge.getAndSet(temp);
+									}
+									if (temp < minEdge.get()) {
+										minEdge.getAndSet(temp);
+									}
+								}
+							}
 						});
 					});
 					break;
@@ -292,47 +338,20 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 			break;
 		}
 
+		averageEdge.set(averageEdge.get() / count.get());
+		
 		logger.info("Minimum Edge Distance is: " + minEdge.get() + " - " + "Maximum Edge Distance is: " + maxEdge.get());
 		return listPairPoints;
 	}
-
-	private ResultModel handlePDBProcessing() {
-
-		AffinityStore affinityStore = parseLineFromOutFile();
-
-		Map<String, List<ExcelStore>> mapExcelStore = new ConcurrentHashMap<String, List<ExcelStore>>();
-		Map<String, Integer> mapIndexCount = new ConcurrentHashMap<String, Integer>();
-
-		Integer indexer = readFromFile(mapExcelStore, mapIndexCount, affinityStore.getChainAFileName(),
-				affinityStore.getChainA(), 1, configurations.getFilePath());
-		indexer = readFromFile(mapExcelStore, mapIndexCount, affinityStore.getChainBFileName(),
-				affinityStore.getChainB(), indexer, configurations.getFilePath());
-
-		final AtomicReference<Double> minEdge = new AtomicReference<Double>();
-		minEdge.set((double) Integer.MAX_VALUE);
-		final AtomicReference<Double> maxEdge = new AtomicReference<Double>();
-		maxEdge.set((double)Integer.MIN_VALUE);
-
-		List<PairPoints> listPairPoints = parsePairPoints(minEdge, maxEdge, mapExcelStore, mapIndexCount);
-
+	
+	private void initGraphNodes() {
 		System.setProperty("org.graphstream.ui", "swing");
-		Graph graph = new SingleGraph("test");
 		graph.setAttribute("ui.quality");
 		graph.setAttribute("ui.antialias");
 		graph.setAttribute("ui.stylesheet", "url('data/style_shp.css')");
 
-		// add some nodes and edges
-		// Set<Integer> nodesLayerA = new HashSet<Integer>();
-		Map<Integer, Node> nodesLayerAGraph = new ConcurrentHashMap<Integer, Node>();
-		// Set<Integer> nodesLayerB = new HashSet<Integer>();
-		Map<Integer, Node> nodesLayerBGraph = new ConcurrentHashMap<Integer, Node>();
-
-		Map<Node, Set<Node>> sinkNeigbourNodes = new ConcurrentHashMap<Node, Set<Node>>();
-
-		// List<Pair<Integer, Integer>> edges = new ArrayList<Pair<Integer, Integer>>();
-
+		// add some nodes
 		int count = 0;
-		int edgeTotalIndex = 0;
 		String prevChain = "";
 		for (String keys : mapExcelStore.keySet()) {
 			if (count == 0) {
@@ -341,6 +360,9 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 					Node temp = graph.addNode(Integer.toString(item.getId()));
 					nodesLayerAGraph.put(item.getId(), temp);
 					temp.addAttribute("ui.style", "fill-color: rgb(0,100,255);");
+					if (configurations.getResidueBased() || configurations.getResidueEnergyMultiplier())
+						temp.addAttribute("residue", item.getResiName().toUpperCase());
+					logger.debug("Residue " + "-" + item.getResiName());
 					temp.addAttribute("layout.frozen");
 					temp.addAttribute("xy", item.getxCoord(), item.getyCoord());
 					if (configurations.getConsiderWeights()) {
@@ -358,6 +380,9 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 					Node temp = graph.addNode(Integer.toString(item.getId() + mapIndexCount.get(tempString)));
 					nodesLayerBGraph.put(item.getId(), temp);
 					temp.addAttribute("ui.style", "fill-color: rgb(255,100,0);");
+					if (configurations.getResidueBased() || configurations.getResidueEnergyMultiplier())
+						temp.addAttribute("residue", item.getResiName());
+					logger.debug("Residue " + "-" + item.getResiName().toUpperCase());
 					temp.addAttribute("layout.frozen");
 					temp.addAttribute("xy", item.getxCoord(), item.getyCoord());
 					if (configurations.getConsiderWeights()) {
@@ -367,9 +392,12 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 				});
 			}
 		}
-
-		// now remove some nodes and edges
-		count = 0;
+	}
+	
+	private void initGraphEdges() {
+		int count = 0;
+		int edgeTotalIndex = 0;
+		List<PairPoints> listPairPoints = parsePairPoints(minEdge, maxEdge, mapExcelStore, mapIndexCount, averageEdge);
 		for (PairPoints temp : listPairPoints) {
 			if (configurations.getConsiderWeights()) {
 				graph.addEdge(
@@ -437,11 +465,17 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 				// sinkNeigbourNodes.get(edge.getTargetNode()).size());
 			}
 		});
+	}
+
+	private ResultModel handlePDBProcessing() {
+
+		initGraphNodes();
+		initGraphEdges();
 
 		if (Boolean.TRUE == configurations.getDebug())
 			logger.info("-------- A ---------");
 		Map<Node, Integer> nodeAVector = new ConcurrentHashMap<Node, Integer>();
-		count = 0;
+		int count = 0;
 		for (Entry<Integer, Node> temp : nodesLayerAGraph.entrySet()) {
 			if (Boolean.TRUE == configurations.getDebug())
 				logger.info(temp.getKey() + "\t" + temp.getValue().getDegree());
@@ -480,7 +514,15 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 		double[] energyPointLayerB = new double[nodesLayerBGraph.entrySet().size() + 1];
 
 		graph.getEdgeSet().stream().forEach(edge -> {
-			dataset[nodeAVector.get(edge.getSourceNode())][nodeBVector.get(edge.getTargetNode())] = 1;
+			dataset[nodeAVector.get(edge.getSourceNode())][nodeBVector.get(edge.getTargetNode())] = 1.0
+					* ((configurations.getResidueBased() || configurations.getResidueEnergyMultiplier())
+							&& configurations.getResidueEnergies()
+									.containsKey(edge.getSourceNode().getAttribute("residue") + "_"
+											+ edge.getTargetNode().getAttribute("residue"))
+													? configurations.getResidueEnergies()
+															.get(edge.getSourceNode().getAttribute("residue") + "_"
+																	+ edge.getTargetNode().getAttribute("residue"))
+													: 1.0);
 
 			if (configurations.getConsiderWeights()) {
 				/* Comment out since negative values 
@@ -488,8 +530,18 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 						.log(((double) maxEdge.get() - ((double) edge.getAttribute("distance")))
 								+ (double) minEdge.get());
 				*/
-				edgeWeightDataset[nodeAVector.get(edge.getSourceNode())][nodeBVector.get(edge.getTargetNode())] = Math
-						.log(maxEdge.get() - (double)edge.getAttribute("distance") + 10.0);
+				logger.debug("Residue Pairs " + "-" + edge.getSourceNode().getAttribute("residue") + " - " + edge.getTargetNode().getAttribute("residue"));
+				edgeWeightDataset[nodeAVector.get(edge.getSourceNode())][nodeBVector.get(edge.getTargetNode())] = /*Math
+						.log*/(((maxEdge.get() - (double) edge.getAttribute("distance"))
+								* ((configurations.getResidueBased() || configurations.getResidueEnergyMultiplier())
+										&& configurations.getResidueEnergies()
+												.containsKey(edge.getSourceNode().getAttribute("residue") + "_"
+														+ edge.getTargetNode().getAttribute("residue")) ? configurations
+																.getResidueEnergies()
+																.get(edge.getSourceNode().getAttribute("residue") + "_"
+																		+ edge.getTargetNode().getAttribute("residue"))
+																: 1.0)
+								* (configurations.getDistanceMultiplier() ? averageEdge.get() : 1.0)) + 10.0);
 			}
 		});
 		/*
@@ -652,17 +704,25 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 			} else {
 				for (Integer itemLayerA : pairs.item1) {
 					for (Integer itemLayerB : pairs.item2) {
-						if (dataset[itemLayerA - 1][itemLayerB] == 1) {
-							dataset[itemLayerA - 1][itemLayerB] = 0;
+						if (dataset[itemLayerA - 1][itemLayerB] == 1 || (dataset[itemLayerA - 1][itemLayerB] != 0.0
+								&& (configurations.getResidueBased() || configurations.getResidueEnergyMultiplier()))) {
 							oneCounter++;
 
 							if (configurations.getConsiderWeights()) {
 								energyPointLayerA[itemLayerA - 1] += edgeWeightDataset[itemLayerA - 1][itemLayerB];
 								energyPointLayerB[itemLayerB] += edgeWeightDataset[itemLayerA - 1][itemLayerB];
 							} else {
-								energyPointLayerA[itemLayerA - 1]++;
-								energyPointLayerB[itemLayerB]++;
+								energyPointLayerA[itemLayerA - 1] += (configurations.getResidueBased()
+										|| configurations.getResidueEnergyMultiplier())
+												? dataset[itemLayerA - 1][itemLayerB]
+												: 1;
+								energyPointLayerB[itemLayerB] += (configurations.getResidueBased()
+										|| configurations.getResidueEnergyMultiplier())
+												? dataset[itemLayerA - 1][itemLayerB]
+												: 1;
 							}
+							logger.debug("Point {}", energyPointLayerA[itemLayerA - 1]);
+							dataset[itemLayerA - 1][itemLayerB] = 0.0;
 						}
 					}
 				}
@@ -735,6 +795,16 @@ public class BindingAffinityExecutor implements Callable<ResultModel> {
 
 	@Override
 	public ResultModel call() throws Exception {
+		// init some values
+		minEdge.set((double) Integer.MAX_VALUE);
+		maxEdge.set((double)Integer.MIN_VALUE);
+		averageEdge.set(0.0);
+		
+		affinityStore = parseLineFromOutFile();
+		Integer indexer = readFromFile(mapExcelStore, mapIndexCount, affinityStore.getChainAFileName(),
+				affinityStore.getChainA(), 1, configurations.getFilePath());
+		indexer = readFromFile(mapExcelStore, mapIndexCount, affinityStore.getChainBFileName(),
+				affinityStore.getChainB(), indexer, configurations.getFilePath());
 		return handlePDBProcessing();
 	}
 }

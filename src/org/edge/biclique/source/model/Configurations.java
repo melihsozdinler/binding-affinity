@@ -1,10 +1,13 @@
 package org.edge.biclique.source.model;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 public class Configurations {
 
 	private String filePath;
 	private String excelFilePath;
 	private Double significanceThreshold;
+	private Double significanceThresholdMax = Double.MAX_VALUE;
 	private Boolean debug;
 	private Integer numberOfBicqliueSteps;
 	private Integer maxNumberOfThreads;
@@ -14,6 +17,12 @@ public class Configurations {
 	private Integer totalSamples;
 	private Boolean considerWeights;
 	private Boolean considerWeightsWithSize;
+	private Boolean distanceMultiplier;
+	private Boolean residueBased;
+	private Boolean residueEnergyMultiplier;
+	private ConcurrentHashMap<String, Double> residueEnergies;
+	private ConcurrentHashMap<String, ResiduePolarProperty> residuePolarProperty = new ConcurrentHashMap<String, ResiduePolarProperty>();
+	private ConcurrentHashMap<String, ResidueChargedProperty> residueChargedProperty = new ConcurrentHashMap<String, ResidueChargedProperty>();
 	
 	public String getFilePath() {
 		return filePath;
@@ -21,7 +30,12 @@ public class Configurations {
 	public void setFilePath(String filePath) {
 		this.filePath = filePath;
 	}
-	
+	public Double getSignificanceThresholdMax() {
+		return significanceThresholdMax;
+	}
+	public void setSignificanceThresholdMax(Double significanceThresholdMax) {
+		this.significanceThresholdMax = significanceThresholdMax;
+	}
 	public Double getSignificanceThreshold() {
 		return significanceThreshold;
 	}
@@ -127,5 +141,41 @@ public class Configurations {
 				" * Total Samples:  " + totalSamples + "\n" + 
 				" * Biclique Steps: " + numberOfBicqliueSteps + "\n" +
 				" * Max Number of Threads: " + maxNumberOfThreads;
+	}
+	public Boolean getDistanceMultiplier() {
+		return distanceMultiplier;
+	}
+	public void setDistanceMultiplier(Boolean distanceMultiplier) {
+		this.distanceMultiplier = distanceMultiplier;
+	}
+	public Boolean getResidueBased() {
+		return residueBased;
+	}
+	public void setResidueBased(Boolean residueBased) {
+		this.residueBased = residueBased;
+	}
+	public ConcurrentHashMap<String, Double> getResidueEnergies() {
+		return residueEnergies;
+	}
+	public void setResidueEnergies(ConcurrentHashMap<String, Double> residueEnergies) {
+		this.residueEnergies = residueEnergies;
+	}
+	public Boolean getResidueEnergyMultiplier() {
+		return residueEnergyMultiplier;
+	}
+	public void setResidueEnergyMultiplier(Boolean residueEnergyMultiplier) {
+		this.residueEnergyMultiplier = residueEnergyMultiplier;
+	}
+	public ConcurrentHashMap<String, ResiduePolarProperty> getResiduePolarProperty() {
+		return residuePolarProperty;
+	}
+	public void setResiduePolarProperty(ConcurrentHashMap<String, ResiduePolarProperty> residueProperty) {
+		this.residuePolarProperty = residueProperty;
+	}
+	public ConcurrentHashMap<String, ResidueChargedProperty> getResidueChargedProperty() {
+		return residueChargedProperty;
+	}
+	public void setResidueChargedProperty(ConcurrentHashMap<String, ResidueChargedProperty> residueChargedProperty) {
+		this.residueChargedProperty = residueChargedProperty;
 	}
 }
