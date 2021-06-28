@@ -1,6 +1,16 @@
 package org.edge.biclique.source.model;
 
 public enum ResiduePolarProperty {
-	POLAR,
-	APOLAR
+	POLAR {
+		@Override
+		public String toString() {
+			return "POLAR";
+		}
+	},
+	APOLAR {
+		@Override
+		public String toString() {
+			return "APOLAR";
+		}
+	}
 }

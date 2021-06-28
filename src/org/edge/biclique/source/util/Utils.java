@@ -1,7 +1,10 @@
 package org.edge.biclique.source.util;
 
+import java.io.File;
+import java.nio.file.FileSystems;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 public class Utils {
 	
@@ -48,5 +51,31 @@ public class Utils {
 	    }
 
 	    return lsParts;
+	}
+	
+	public static Double checkDoubleAndReturn(String doubleStr) {
+		if(doubleStr.lastIndexOf(".") == doubleStr.indexOf(".")) {
+			return Double.parseDouble(doubleStr);
+		}
+		else {
+			return Double.parseDouble(doubleStr.substring(0, doubleStr.lastIndexOf(".")));
+		}
+	}
+	
+	public static String getUniqueFileName(String fileBaseName, String directory, String extension) {
+		String fileName = FileSystems.getDefault().getPath(".").toAbsolutePath() + "\\" + directory + fileBaseName + "_"
+				+ UUID.randomUUID() + "." + extension.trim();
+		return fileName;
+	}
+	
+	public static void removeFiles(String directory, String extension) {
+		File folder = new File(FileSystems.getDefault().getPath(".").toAbsolutePath() + "\\" + directory);
+		File fList[] = folder.listFiles();
+
+		for (File f : fList) {
+			if (f.getName().endsWith(extension)) {
+				f.delete();
+			}
+		}
 	}
 }

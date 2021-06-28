@@ -268,6 +268,16 @@ public final class BuilderBindingAffinityAnalyzer{
 			this.configurations.setResidueEnergyMultiplier(residueEnergyMultiplier);
 			return this;
 		}
+		
+		public Builder setPropertyOne(String propertyOne) {
+			this.configurations.setPropertyOne(propertyOne);
+			return this;
+		}
+		
+		public Builder setPropertyTwo(String propertyTwo) {
+			this.configurations.setPropertyTwo(propertyTwo);
+			return this;
+		}
 
 		public Configurations getConfigurations() {
 			return configurations;

@@ -23,6 +23,8 @@ public class Configurations {
 	private ConcurrentHashMap<String, Double> residueEnergies;
 	private ConcurrentHashMap<String, ResiduePolarProperty> residuePolarProperty = new ConcurrentHashMap<String, ResiduePolarProperty>();
 	private ConcurrentHashMap<String, ResidueChargedProperty> residueChargedProperty = new ConcurrentHashMap<String, ResidueChargedProperty>();
+	private String propertyOne;
+	private String propertyTwo;
 	
 	public String getFilePath() {
 		return filePath;
@@ -177,5 +179,17 @@ public class Configurations {
 	}
 	public void setResidueChargedProperty(ConcurrentHashMap<String, ResidueChargedProperty> residueChargedProperty) {
 		this.residueChargedProperty = residueChargedProperty;
+	}
+	public String getPropertyOne() {
+		return propertyOne;
+	}
+	public void setPropertyOne(String propertyOne) {
+		this.propertyOne = propertyOne;
+	}
+	public String getPropertyTwo() {
+		return propertyTwo;
+	}
+	public void setPropertyTwo(String propertyTwo) {
+		this.propertyTwo = propertyTwo;
 	}
 }
