@@ -300,7 +300,7 @@ public final class BuilderBindingAffinityAnalyzer{
 			StringTokenizer st = new StringTokenizer(fileContent);
 
 			String line = st.nextToken("\n");
-			// Parse title lines at the top
+			// Parse title lines a t the top
 			line = st.nextToken("\n");
 			while (st.hasMoreTokens() || !line.isEmpty()) {
 				Callable<ResultModel> task = new BindingAffinityExecutor(configurations, line);

@@ -6,7 +6,14 @@ public class ExcelStore extends Point3d{
 	String resiName;
 	String name;
 	Integer id;
+	Double resolution;
 	
+	public Double getResolution() {
+		return resolution;
+	}
+	public void setResolution(Double resolution) {
+		this.resolution = resolution;
+	}
 	public Integer getId() {
 		return id;
 	}

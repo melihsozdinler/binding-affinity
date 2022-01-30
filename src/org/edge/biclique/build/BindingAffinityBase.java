@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -13,6 +14,8 @@ import java.util.StringTokenizer;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.edge.biclique.source.model.AffinityStore;
 import org.edge.biclique.source.model.Configurations;
@@ -31,9 +34,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public abstract class BindingAffinityBase implements FeatureCheck {
-	
+
 	final static Logger logger = LoggerFactory.getLogger(BindingAffinityExecutor.class);
-	
+
 	protected Configurations configurations;
 	protected String line;
 	protected Map<String, List<ExcelStore>> mapExcelStore;
@@ -45,12 +48,12 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 	// Set<Integer> nodesLayerB = new HashSet<Integer>();
 	protected Map<Integer, Node> nodesLayerBGraph;
 	protected Map<Node, Set<Node>> sinkNeigbourNodes;
-	
+
 	protected final AtomicReference<Double> minEdge;
 	protected final AtomicReference<Double> maxEdge;
 	protected final AtomicReference<Double> averageEdge;
-	
-	BindingAffinityBase(){
+
+	BindingAffinityBase() {
 		configurations = new Configurations();
 		mapExcelStore = new ConcurrentHashMap<String, List<ExcelStore>>();
 		mapIndexCount = new ConcurrentHashMap<String, Integer>();
@@ -97,9 +100,10 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 		}
 		return affinityStore;
 	}
-	
-	protected Integer readFromFileResidue(Map<String, List<ExcelStore>> mapExcelStore, Map<String, Integer> mapIndexCount,
-			String fileName, String chainName, Integer indexerInput, String filePath) {
+
+	protected Integer readFromFileResidue(Map<String, List<ExcelStore>> mapExcelStore,
+			Map<String, Integer> mapIndexCount, String fileName, String chainName, Integer indexerInput,
+			String filePath) {
 
 		logger.info("Reading filename " + fileName + " - for chain " + chainName + " - indexer:" + indexerInput);
 		String content = null;
@@ -110,6 +114,7 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 			StringTokenizer st = new StringTokenizer(content);
 			String residueName = "";
 			String lastResidueName = "";
+			Double resolution = 0.0;
 			while (st.hasMoreTokens()) {
 				String line = st.nextToken("\n");
 				StringTokenizer stInner = new StringTokenizer(line);
@@ -117,7 +122,18 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 				ExcelStore item = new ExcelStore();
 				int innerCount = 0;
 				while (stInner.hasMoreTokens()) {
-					if (line.contains("BEGIN") || line.contains("END")) {
+					if (line.contains("BEGIN") || line.contains("END") || line.contains("REMARK")) {
+						String cellValue = stInner.nextToken(" ");
+						if (line.contains("REMARK")) {
+							String[] words = line.split(" ");
+							List<String> collect =
+								    Stream.of(words)
+								        .filter(itemStr -> itemStr != null && !"".equals(itemStr))
+								        .collect(Collectors.toList());
+							resolution = Double.parseDouble(collect.get(3));
+							logger.info("Resolution is " + fileName + " - for chain " + chainName
+									+ " - indexer:" + indexerInput + " ANGSTROMS:" + resolution);
+						}
 						continue;
 					}
 					String cellValue = stInner.nextToken(" ");
@@ -137,8 +153,7 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 						} else if (innerCount == 3) {
 							item.setResiName(cellValue);
 							residueName = cellValue;
-						}
-						else if (innerCount == 2)
+						} else if (innerCount == 2)
 							item.setName(cellValue);
 						else if (innerCount == 6)
 							item.setxCoord(Utils.checkDoubleAndReturn(cellValue));
@@ -155,13 +170,19 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 					if (mapExcelStore.containsKey(chainName)) {
 						item.setId(indexer);
 						item.setChain(chainName);
-						mapExcelStore.get(chainName).add(item);
+
+						if (item.getName() != null) {
+							mapExcelStore.get(chainName).add(item);
+						}
 					} else {
 						item.setId(indexer);
 						List<ExcelStore> listExcelStore = new ArrayList<ExcelStore>();
 						mapExcelStore.put(chainName, listExcelStore);
 						item.setChain(chainName);
-						mapExcelStore.get(chainName).add(item);
+
+						if (item.getName() != null) {
+							mapExcelStore.get(chainName).add(item);
+						}
 					}
 				}
 				lastResidueName = residueName;
@@ -173,13 +194,14 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 		}
 
 		mapIndexCount.put(chainName, indexer);
-		logger.info("Finished Reading filename based on Residues " + fileName + " - for chain " + chainName + " - indexer:" + indexerInput);
+		logger.info("Finished Reading filename based on Residues " + fileName + " - for chain " + chainName
+				+ " - indexer:" + indexerInput);
 		return indexer;
 	}
 
 	protected Integer readFromFile(Map<String, List<ExcelStore>> mapExcelStore, Map<String, Integer> mapIndexCount,
 			String fileName, String chainName, Integer indexerInput, String filePath) {
-		
+
 		if (configurations.getResidueBased()) {
 			return readFromFileResidue(mapExcelStore, mapIndexCount, fileName, chainName, indexerInput, filePath);
 		}
@@ -193,12 +215,24 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 			StringTokenizer st = new StringTokenizer(content);
 			while (st.hasMoreTokens()) {
 				String line = st.nextToken("\n");
+				logger.debug(line);
 				StringTokenizer stInner = new StringTokenizer(line);
 
 				ExcelStore item = new ExcelStore();
 				int innerCount = 0;
 				while (stInner.hasMoreTokens()) {
-					if (line.contains("BEGIN") || line.contains("END")) {
+					if (line.contains("BEGIN") || line.contains("END") || line.contains("REMARK")) {
+						String cellValue = stInner.nextToken(" ");
+						if (line.contains("REMARK")) {
+							String[] words = line.split(" ");
+							List<String> collect =
+								    Stream.of(words)
+								        .filter(itemStr -> itemStr != null && !"".equals(itemStr))
+								        .collect(Collectors.toList());
+							item.setResolution(Double.parseDouble(collect.get(3)));
+							logger.info("Resolution is " + fileName + " - for chain " + chainName
+									+ " - indexer:" + indexerInput + " ANGSTROMS:" + item.getResolution());
+						}
 						continue;
 					}
 					String cellValue = stInner.nextToken(" ");
@@ -233,33 +267,41 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 				if (mapExcelStore.containsKey(chainName)) {
 					item.setId(indexer);
 					item.setChain(chainName);
-					mapExcelStore.get(chainName).add(item);
+					if (item.getName() != null) {
+						mapExcelStore.get(chainName).add(item);
+					}
 				} else {
 					item.setId(indexer);
 					List<ExcelStore> listExcelStore = new ArrayList<ExcelStore>();
 					mapExcelStore.put(chainName, listExcelStore);
 					item.setChain(chainName);
-					mapExcelStore.get(chainName).add(item);
+
+					if (item.getName() != null) {
+						mapExcelStore.get(chainName).add(item);
+					}
 				}
 				indexer++;
 			}
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
+			logger.error("Error occurs while reading PDB file");
 			e.printStackTrace();
 		}
 
 		mapIndexCount.put(chainName, indexer);
-		logger.info("Finished Reading filename based on Atoms" + fileName + " - for chain " + chainName + " - indexer:" + indexerInput);
+		logger.info("Finished Reading filename based on Atoms: " + fileName + " - for chain " + chainName
+				+ " - indexer:" + indexerInput);
 		return indexer;
 	}
-	
+
 	protected List<PairPoints> parsePairPoints(AtomicReference<Double> minEdge, AtomicReference<Double> maxEdge,
-			Map<String, List<ExcelStore>> mapExcelStore, Map<String, Integer> mapIndexCount, AtomicReference<Double> averageEdge) {
+			Map<String, List<ExcelStore>> mapExcelStore, Map<String, Integer> mapIndexCount,
+			AtomicReference<Double> averageEdge) {
 
 		List<PairPoints> listPairPoints = new ArrayList<PairPoints>();
-		
-		AtomicInteger count = new AtomicInteger();	
-		
+
+		AtomicInteger count = new AtomicInteger();
+
 		for (String keys : mapExcelStore.keySet()) {
 			final List<ExcelStore> tempExcelStorList = mapExcelStore.get(keys);
 			for (String keysInner : mapExcelStore.keySet()) {
@@ -267,9 +309,9 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 					List<ExcelStore> tempExcelStorListInner = mapExcelStore.get(keysInner);
 					tempExcelStorList.forEach(item -> {
 						tempExcelStorListInner.forEach(itemInner -> {
-							//logger.debug("Distance: " + item.distanceTo(itemInner));
+							// logger.debug("Distance: " + item.distanceTo(itemInner));
 							double temp = item.distanceTo(itemInner);
-							
+
 							averageEdge.set(averageEdge.get() + Math.abs(temp));
 							count.getAndAdd(1);
 							if (temp < configurations.getSignificanceThreshold()
@@ -294,11 +336,10 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 								if (temp < minEdge.get()) {
 									minEdge.getAndSet(temp);
 								}
-							}
-							else {
+							} else {
 								if (temp >= configurations.getSignificanceThreshold()
 										&& temp < configurations.getSignificanceThresholdMax()) {
-									
+
 									PairPoints pairPoints = new PairPoints();
 
 									pairPoints.setSourceIndex(item.getId());
@@ -310,7 +351,7 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 									pairPoints.setSourcePoint(item.getPoint3d());
 									pairPoints.setTargetPoint(itemInner.getPoint3d());
 									listPairPoints.add(pairPoints);
-									
+
 									if (temp >= maxEdge.get()) {
 										maxEdge.getAndSet(temp);
 									}
@@ -328,11 +369,12 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 		}
 
 		averageEdge.set(averageEdge.get() / count.get());
-		
-		logger.info("Minimum Edge Distance is: " + minEdge.get() + " - " + "Maximum Edge Distance is: " + maxEdge.get());
+
+		logger.info(
+				"Minimum Edge Distance is: " + minEdge.get() + " - " + "Maximum Edge Distance is: " + maxEdge.get());
 		return listPairPoints;
 	}
-	
+
 	protected void initGraphNodes() {
 		System.setProperty("org.graphstream.ui", "swing");
 		graph.setAttribute("ui.quality");
@@ -380,7 +422,7 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 			}
 		}
 	}
-	
+
 	protected void initGraphEdges() {
 		int edgeTotalIndex = 0;
 		List<PairPoints> listPairPoints = parsePairPoints(minEdge, maxEdge, mapExcelStore, mapIndexCount, averageEdge);
@@ -435,7 +477,8 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 					pointTarget.setxCoord((double) arrayTarget[0]);
 					pointTarget.setyCoord((double) arrayTarget[1]);
 					pointTarget.setzCoord((double) arrayTarget[2]);
-					edge.addAttribute("distance", pointSource.distanceTo(pointTarget));;
+					edge.addAttribute("distance", pointSource.distanceTo(pointTarget));
+					;
 					logger.debug("Distance is {}", edge.getAttribute("distance").toString());
 					/*
 					 * logger.info("1: Node Source(" + edge.getSourceNode().getId() + "):" +
@@ -470,7 +513,7 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 					}
 				}
 			}
-			
+
 			if (configurations.getConsiderWeightsWithSize()) {
 				for (Integer itemLayerA : pairs.item1) {
 					for (Integer itemLayerB : pairs.item2) {
@@ -515,16 +558,17 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 		}
 		return oneCounter;
 	}
-	
+
 	protected abstract ResultModel handlePDBProcessing();
-	
+
 	@Override
 	public boolean checkPolarAttributeAndRemove(Node source, Node target) {
 		// GDP and NAS
-		ResiduePolarProperty targetProperty = configurations.getResiduePolarProperty().get(target.getAttribute("residue").toString());
-		ResiduePolarProperty sourceProperty = configurations.getResiduePolarProperty().get(source.getAttribute("residue").toString());
-		if (targetProperty == null
-				|| sourceProperty == null) {
+		ResiduePolarProperty targetProperty = configurations.getResiduePolarProperty()
+				.get(target.getAttribute("residue").toString());
+		ResiduePolarProperty sourceProperty = configurations.getResiduePolarProperty()
+				.get(source.getAttribute("residue").toString());
+		if (targetProperty == null || sourceProperty == null) {
 			return false;
 		}
 		boolean polarCheckPropOne = configurations.getPropertyOne().equals(ResiduePolarProperty.POLAR.toString());
@@ -541,15 +585,16 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 				} else {
 					return false;
 				}
-			}
-			else {
+			} else {
 				// POLAR-POLAR && APOLAR-APOLAR cases here
 				if ((targetProperty == sourceProperty)
 						&& configurations.getPropertyOne().equals(sourceProperty.toString())) {
-					// POLAR-POLAR and the property is POLAR or APOLAR-APOLAR and the property is APOLAR
+					// POLAR-POLAR and the property is POLAR or APOLAR-APOLAR and the property is
+					// APOLAR
 					return true;
 				} else {
-					// POLAR-POLAR and the property is APOLAR or APOLAR-APOLAR and the property is POLAR
+					// POLAR-POLAR and the property is APOLAR or APOLAR-APOLAR and the property is
+					// POLAR
 					return false;
 				}
 			}
@@ -566,12 +611,15 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 		}
 		boolean chargedCheckPropOne = configurations.getPropertyOne().equals(ResidueChargedProperty.CHARGED.toString());
 		boolean chargedCheckPropTwo = configurations.getPropertyTwo().equals(ResidueChargedProperty.CHARGED.toString());
-		boolean unchargedCheckPropOne = configurations.getPropertyOne().equals(ResidueChargedProperty.UNCHARGED.toString());
-		boolean unchargedCheckPropTwo = configurations.getPropertyTwo().equals(ResidueChargedProperty.UNCHARGED.toString());
+		boolean unchargedCheckPropOne = configurations.getPropertyOne()
+				.equals(ResidueChargedProperty.UNCHARGED.toString());
+		boolean unchargedCheckPropTwo = configurations.getPropertyTwo()
+				.equals(ResidueChargedProperty.UNCHARGED.toString());
 		if ((chargedCheckPropOne && chargedCheckPropTwo) || (chargedCheckPropOne && unchargedCheckPropTwo)
 				|| (unchargedCheckPropOne && chargedCheckPropTwo) || (unchargedCheckPropOne && unchargedCheckPropTwo)) {
-			if ((configurations.getPropertyOne().contains(
-					configurations.getResidueChargedProperty().get(source.getAttribute("residue").toString()).toString())
+			if ((configurations.getPropertyOne()
+					.contains(configurations.getResidueChargedProperty().get(source.getAttribute("residue").toString())
+							.toString())
 					&& configurations.getPropertyTwo()
 							.contains(configurations.getResidueChargedProperty()
 									.get(target.getAttribute("residue").toString()).toString()))
@@ -616,7 +664,7 @@ public abstract class BindingAffinityBase implements FeatureCheck {
 		}
 		return false;
 	}
-	
+
 	@Override
 	public boolean checkApolarChargedAttributeAndRemove(Node source, Node target) {
 		if (target.getAttribute("residue").toString().contains("GDP")

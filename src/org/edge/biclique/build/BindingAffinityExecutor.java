@@ -37,6 +37,7 @@ import org.edge.biclique.source.model.ResultModel;
 import org.edge.biclique.source.util.FileUtils;
 import org.edge.biclique.source.util.PolygonDraw;
 import org.edge.biclique.source.util.Utils;
+import org.graphstream.algorithm.Toolkit;
 import org.graphstream.graph.Edge;
 import org.graphstream.graph.Graph;
 import org.graphstream.graph.Node;
@@ -280,7 +281,13 @@ public class BindingAffinityExecutor extends BindingAffinityBase implements Call
 				.collect(Collectors.toCollection(ArrayList::new));
 		resultModel.sizeA = nodesLayerAGraph.entrySet().size();
 		resultModel.sizeB = nodesLayerBGraph.entrySet().size();
-
+		Toolkit.computeLayout(graph); synchronized (graph) {
+			try {
+				graph.write("D:\\eclipse\\research-workspace\\binding-affinity\\" + resultModel.complexName + ".png");
+			} catch (IOException e) {
+				// TODO Auto-generated catch block e.printStackTrace();
+			}
+		}
 		/*
 		 * Toolkit.computeLayout(graph); synchronized (graph) {
 		 * 
@@ -294,7 +301,7 @@ public class BindingAffinityExecutor extends BindingAffinityBase implements Call
 	@Override
 	public ResultModel call() throws Exception {
 		// init some values
-		minEdge.set((double) Integer.MAX_VALUE);
+		minEdge.set((double)Integer.MAX_VALUE);
 		maxEdge.set((double)Integer.MIN_VALUE);
 		averageEdge.set(0.0);
 		
